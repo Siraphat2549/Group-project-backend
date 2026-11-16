@@ -19,6 +19,7 @@ import { App } from 'supertest/types';
 process.env.JWT_SECRET ??= 'e2e-secret-e2e-secret-e2e-secret-e2e';
 process.env.REDIS_URL ??= 'redis://127.0.0.1:6379';
 process.env.BCRYPT_ROUNDS = '4'; // fast hashes; strength is not under test here
+process.env.JWT_EXPIRES_IN = '1h';
 process.env.THROTTLE_TTL_MS = '60000';
 process.env.THROTTLE_LIMIT = '1000';
 process.env.THROTTLE_AUTH_LIMIT = '25';

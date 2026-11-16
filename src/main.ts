@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
+import { setupSwagger } from './swagger/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -13,6 +14,8 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
   configureApp(app);
+  // Swagger UI at /docs, OpenAPI JSON at /docs-json (FR-37).
+  setupSwagger(app);
 
   // Lets Docker/Kubernetes stop the container gracefully (SIGTERM).
   app.enableShutdownHooks();
