@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Same images/credentials as docker-compose.test.yml (throwaway test values).
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: hotel_booking_test
+          MYSQL_USER: hotel_test
+          MYSQL_PASSWORD: hotel_test
+          MYSQL_ROOT_PASSWORD: hotel_test_root
+        ports: ['3307:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -photel_test_root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+
+    env:
+      TEST_DATABASE_URL: mysql://hotel_test:hotel_test@127.0.0.1:3307/hotel_booking_test
+      TEST_REDIS_URL: redis://127.0.0.1:6380
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - name: Unit tests (with coverage)
+        run: npm run test:cov
+      - name: Integration tests (real MySQL + Redis)
+        run: npm run test:integration
+      - name: E2E tests (real MySQL + Redis)
+        run: npm run test:e2e
+      - name: OpenAPI spec + documentation report
+        run: npm run openapi
