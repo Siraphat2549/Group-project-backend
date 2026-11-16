@@ -4,8 +4,11 @@ import {
   HealthCheckService,
   HealthIndicatorService,
 } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 import { DependencyHealthIndicator } from './dependency.health';
 
+// Monitoring must never be rate limited into reporting a false outage.
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(

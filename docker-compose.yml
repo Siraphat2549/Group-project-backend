@@ -32,8 +32,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
-      # Exposed so `npm run start:dev` on the host can use this DB too.
-      - '${MYSQL_HOST_PORT:-3306}:3306'
+      # For `npm run start:dev` on the host. Bound to loopback only, so the
+      # database is never reachable from the internet on a server.
+      - '127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306'
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -48,7 +49,8 @@ services:
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes']
     ports:
-      - '${REDIS_HOST_PORT:-6379}:6379'
+      # Loopback only: this Redis has no password.
+      - '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379'
     volumes:
       - redis-data:/data
     healthcheck:

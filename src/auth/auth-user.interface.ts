@@ -7,11 +7,25 @@ export interface AuthUser {
   role: Role;
 }
 
-/** JWT payload contract. Auth's login must sign tokens with exactly this shape. */
+/**
+ * JWT payload contract. Login signs `sub`, `email`, `role` and a unique
+ * `jti`; the JWT library adds `iat` / `exp` (seconds since epoch).
+ */
 export interface JwtPayload {
   sub: number;
   email: string;
   role: Role;
+  jti?: string;
+  iat?: number;
+  exp?: number;
+}
+
+/** Identity and lifetime of the token behind a request (`req.token`). */
+export interface TokenInfo {
+  /** Unique token id; lets logout revoke exactly this token. */
+  jti?: string;
+  iat: number;
+  exp: number;
 }
 
 export function isAdmin(user: AuthUser | undefined): boolean {

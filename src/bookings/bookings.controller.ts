@@ -13,6 +13,8 @@ import { Role } from '@prisma/client';
 import type { AuthUser } from '../auth/auth-user.interface';
 import { CurrentUser, Roles } from '../auth/decorators';
 import { JwtAuthGuard, RolesGuard } from '../auth/guards';
+import { InvalidatesCache } from '../cache/cache.decorators';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { BookingsService } from './bookings.service';
 import {
   CreateBookingDto,
@@ -28,6 +30,8 @@ export class BookingsController {
 
   /** FR-17..22. 201 + Pending; 409 on overlap; 400 on invalid dates. */
   @Post()
+  @RateLimit('booking')
+  @InvalidatesCache('bookings')
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {
     return {
       message: 'Booking created successfully',
@@ -52,6 +56,7 @@ export class BookingsController {
 
   /** Owner or admin cancels (FR-31 event recorded). */
   @Patch(':id/cancel')
+  @InvalidatesCache('bookings')
   async cancel(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
@@ -65,6 +70,7 @@ export class BookingsController {
   /** FR-26. Admin only. */
   @Patch(':id/status')
   @Roles(Role.ADMIN)
+  @InvalidatesCache('bookings')
   async updateStatus(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseIntPipe) id: number,

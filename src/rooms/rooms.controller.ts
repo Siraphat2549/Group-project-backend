@@ -20,6 +20,7 @@ import { isAdmin } from '../auth/auth-user.interface';
 import type { AuthUser } from '../auth/auth-user.interface';
 import { CurrentUser, Roles } from '../auth/decorators';
 import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard } from '../auth/guards';
+import { CachedResponse, InvalidatesCache } from '../cache/cache.decorators';
 import { parseDateRange } from '../common/utils/date-range';
 import {
   CreateRoomDto,
@@ -40,6 +41,7 @@ export class RoomsController {
   /** FR-12, FR-28. Public. Admins may pass includeInactive=true. */
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
+  @CachedResponse('rooms')
   list(@Query() query: ListRoomsQueryDto, @CurrentUser() user?: AuthUser) {
     return this.rooms.findAll(query, { isAdmin: isAdmin(user) });
   }
@@ -47,6 +49,8 @@ export class RoomsController {
   /** FR-27..29. Only rooms free for the whole [checkIn, checkOut) range. */
   @Get('search')
   @UseGuards(OptionalJwtAuthGuard)
+  // Availability also changes with every booking, not only with rooms.
+  @CachedResponse('rooms', 'bookings')
   search(@Query() query: SearchRoomsQueryDto, @CurrentUser() user?: AuthUser) {
     const range = parseDateRange(query.checkIn, query.checkOut);
     return this.rooms.findAll(query, { isAdmin: isAdmin(user), range });
@@ -55,6 +59,7 @@ export class RoomsController {
   /** FR-13, FR-16. */
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
+  @CachedResponse('rooms')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user?: AuthUser,
@@ -66,6 +71,7 @@ export class RoomsController {
   @Post()
   @AdminOnly()
   @Roles(Role.ADMIN)
+  @InvalidatesCache('rooms')
   async create(@Body() dto: CreateRoomDto) {
     return {
       message: 'Room created successfully',
@@ -77,6 +83,7 @@ export class RoomsController {
   @Patch(':id')
   @AdminOnly()
   @Roles(Role.ADMIN)
+  @InvalidatesCache('rooms')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRoomDto,
@@ -91,6 +98,7 @@ export class RoomsController {
   @Delete(':id')
   @AdminOnly()
   @Roles(Role.ADMIN)
+  @InvalidatesCache('rooms')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.rooms.remove(id);
     return { message: 'Room deleted successfully' };
@@ -100,6 +108,7 @@ export class RoomsController {
   @Post(':id/images')
   @AdminOnly()
   @Roles(Role.ADMIN)
+  @InvalidatesCache('rooms')
   @UseInterceptors(
     FileInterceptor(IMAGE_FIELD, {
       limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
@@ -118,6 +127,7 @@ export class RoomsController {
   @Delete(':id/images/:imageId')
   @AdminOnly()
   @Roles(Role.ADMIN)
+  @InvalidatesCache('rooms')
   @HttpCode(HttpStatus.OK)
   async removeImage(
     @Param('id', ParseIntPipe) id: number,

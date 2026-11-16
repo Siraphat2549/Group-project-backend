@@ -24,6 +24,11 @@ const uploadDir = mkdtempSync(join(tmpdir(), 'hotel-e2e-'));
 process.env.UPLOAD_DIR = uploadDir;
 process.env.JWT_SECRET ??= 'e2e-secret-e2e-secret-e2e-secret-e2e';
 process.env.REDIS_URL ??= 'redis://127.0.0.1:6379';
+// This suite fires far more requests per minute than a real client; rate
+// limiting itself is covered in auth.e2e-spec.ts.
+process.env.THROTTLE_LIMIT = '100000';
+process.env.THROTTLE_AUTH_LIMIT = '100000';
+process.env.THROTTLE_BOOKING_LIMIT = '100000';
 
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 

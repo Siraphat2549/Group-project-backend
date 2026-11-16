@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { ConsoleLogger, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -6,7 +6,11 @@ import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // One JSON object per line in production, ready for a log collector
+    // (NFR-17); colourised text during development.
+    logger: new ConsoleLogger({ json: process.env.NODE_ENV === 'production' }),
+  });
   const config = app.get(ConfigService);
   configureApp(app);
 

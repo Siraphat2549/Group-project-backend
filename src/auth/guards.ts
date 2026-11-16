@@ -9,10 +9,16 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import { Request } from 'express';
-import { AuthUser, JwtPayload } from './auth-user.interface';
+import { AuthUser, JwtPayload, TokenInfo } from './auth-user.interface';
 import { ROLES_KEY } from './decorators';
+import { TokenRevocationService } from './token-revocation.service';
 
-type AuthRequest = Request & { user?: AuthUser };
+type AuthRequest = Request & { user?: AuthUser; token?: TokenInfo };
+
+interface VerifiedToken {
+  user: AuthUser;
+  token: TokenInfo;
+}
 
 function extractBearer(req: Request): string | undefined {
   const header = req.headers.authorization;
@@ -31,23 +37,43 @@ function isValidPayload(p: unknown): p is JwtPayload {
   );
 }
 
+/**
+ * Signature + expiry (JwtService), payload shape, then revocation (logout /
+ * password change). Any failure means "not authenticated".
+ */
 async function verify(
   jwt: JwtService,
-  token: string,
-): Promise<AuthUser | undefined> {
+  revocations: TokenRevocationService,
+  rawToken: string,
+): Promise<VerifiedToken | undefined> {
+  let payload: unknown;
   try {
-    const payload: unknown = await jwt.verifyAsync(token);
-    if (!isValidPayload(payload)) return undefined;
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    payload = await jwt.verifyAsync(rawToken);
   } catch {
     return undefined;
   }
+  if (!isValidPayload(payload)) return undefined;
+
+  const token: TokenInfo = {
+    jti: typeof payload.jti === 'string' ? payload.jti : undefined,
+    iat: payload.iat ?? 0,
+    exp: payload.exp ?? 0,
+  };
+  if (await revocations.isRevoked(payload.sub, token)) return undefined;
+
+  return {
+    user: { id: payload.sub, email: payload.email, role: payload.role },
+    token,
+  };
 }
 
 /** Requires a valid `Authorization: Bearer <jwt>` header (NFR-2). */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly revocations: TokenRevocationService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<AuthRequest>();
@@ -57,11 +83,12 @@ export class JwtAuthGuard implements CanActivate {
         'Authentication required: send Authorization: Bearer <token>',
       );
     }
-    const user = await verify(this.jwt, token);
-    if (!user) {
+    const verified = await verify(this.jwt, this.revocations, token);
+    if (!verified) {
       throw new UnauthorizedException('Invalid or expired token');
     }
-    req.user = user;
+    req.user = verified.user;
+    req.token = verified.token;
     return true;
   }
 }
@@ -72,12 +99,19 @@ export class JwtAuthGuard implements CanActivate {
  */
 @Injectable()
 export class OptionalJwtAuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly revocations: TokenRevocationService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<AuthRequest>();
     const token = extractBearer(req);
-    if (token) req.user = await verify(this.jwt, token);
+    if (token) {
+      const verified = await verify(this.jwt, this.revocations, token);
+      req.user = verified?.user;
+      req.token = verified?.token;
+    }
     return true;
   }
 }

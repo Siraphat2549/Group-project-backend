@@ -9,8 +9,19 @@ export interface EnvironmentVariables {
   HEALTH_CHECK_TIMEOUT_MS: number;
   CORS_ORIGIN?: string;
   JWT_SECRET: string;
+  JWT_EXPIRES_IN: string;
   UPLOAD_DIR: string;
+  BCRYPT_ROUNDS: number;
+  CACHE_TTL_SECONDS: number;
+  THROTTLE_TTL_MS: number;
+  THROTTLE_LIMIT: number;
+  THROTTLE_AUTH_LIMIT: number;
+  THROTTLE_BOOKING_LIMIT: number;
+  TRUST_PROXY: number;
 }
+
+/** jsonwebtoken time span: plain seconds ("3600") or number + unit ("15m", "1h", "7d"). */
+const JWT_EXPIRES_IN_PATTERN = /^\d+(s|m|h|d)?$/;
 
 export const MIN_JWT_SECRET_LENGTH = 32;
 
@@ -83,6 +94,7 @@ export function validateEnv(env: RawEnv): EnvironmentVariables & RawEnv {
     errors.push(`NODE_ENV must be one of: ${NODE_ENVS.join(', ')}`);
   }
 
+  const limitRange = { min: 1, max: 1000000 };
   const validated: EnvironmentVariables = {
     NODE_ENV: nodeEnvRaw as NodeEnv,
     PORT: readInt(env, 'PORT', 3000, errors, { min: 1, max: 65535 }),
@@ -100,8 +112,44 @@ export function validateEnv(env: RawEnv): EnvironmentVariables & RawEnv {
     ),
     CORS_ORIGIN: readString(env, 'CORS_ORIGIN'),
     JWT_SECRET: readString(env, 'JWT_SECRET') ?? '',
+    JWT_EXPIRES_IN: readString(env, 'JWT_EXPIRES_IN') ?? '1h',
     UPLOAD_DIR: readString(env, 'UPLOAD_DIR') ?? 'uploads',
+    // 12 rounds ~ 250 ms per hash: slow for attackers, fine for a login.
+    BCRYPT_ROUNDS: readInt(env, 'BCRYPT_ROUNDS', 12, errors, {
+      min: 4,
+      max: 15,
+    }),
+    // 0 disables response caching.
+    CACHE_TTL_SECONDS: readInt(env, 'CACHE_TTL_SECONDS', 60, errors, {
+      min: 0,
+      max: 86400,
+    }),
+    THROTTLE_TTL_MS: readInt(env, 'THROTTLE_TTL_MS', 60000, errors, {
+      min: 1000,
+      max: 3600000,
+    }),
+    THROTTLE_LIMIT: readInt(env, 'THROTTLE_LIMIT', 120, errors, limitRange),
+    THROTTLE_AUTH_LIMIT: readInt(
+      env,
+      'THROTTLE_AUTH_LIMIT',
+      10,
+      errors,
+      limitRange,
+    ),
+    THROTTLE_BOOKING_LIMIT: readInt(
+      env,
+      'THROTTLE_BOOKING_LIMIT',
+      20,
+      errors,
+      limitRange,
+    ),
+    // Number of reverse proxies in front of the API (0 = direct).
+    TRUST_PROXY: readInt(env, 'TRUST_PROXY', 0, errors, { min: 0, max: 10 }),
   };
+
+  if (!JWT_EXPIRES_IN_PATTERN.test(validated.JWT_EXPIRES_IN)) {
+    errors.push('JWT_EXPIRES_IN must look like 900, 15m, 1h or 7d');
+  }
 
   if (!validated.JWT_SECRET) {
     errors.push('JWT_SECRET is required');

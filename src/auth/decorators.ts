@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Request } from 'express';
-import { AuthUser } from './auth-user.interface';
+import { AuthUser, TokenInfo } from './auth-user.interface';
 
 export const ROLES_KEY = 'roles';
 
@@ -16,4 +16,10 @@ export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthUser | undefined =>
     ctx.switchToHttp().getRequest<Request & { user?: AuthUser }>().user,
+);
+
+/** Injects the verified token's id and lifetime (set by JwtAuthGuard). */
+export const CurrentToken = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): TokenInfo | undefined =>
+    ctx.switchToHttp().getRequest<Request & { token?: TokenInfo }>().token,
 );

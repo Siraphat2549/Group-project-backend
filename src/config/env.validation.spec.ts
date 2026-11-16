@@ -60,4 +60,35 @@ describe('validateEnv', () => {
   it('defaults UPLOAD_DIR to "uploads"', () => {
     expect(validateEnv(base).UPLOAD_DIR).toBe('uploads');
   });
+
+  it('applies auth, cache and rate-limit defaults', () => {
+    expect(validateEnv(base)).toMatchObject({
+      JWT_EXPIRES_IN: '1h',
+      BCRYPT_ROUNDS: 12,
+      CACHE_TTL_SECONDS: 60,
+      THROTTLE_TTL_MS: 60000,
+      THROTTLE_LIMIT: 120,
+      THROTTLE_AUTH_LIMIT: 10,
+      THROTTLE_BOOKING_LIMIT: 20,
+      TRUST_PROXY: 0,
+    });
+  });
+
+  it('allows caching to be switched off with CACHE_TTL_SECONDS=0', () => {
+    expect(validateEnv({ ...base, CACHE_TTL_SECONDS: '0' })).toMatchObject({
+      CACHE_TTL_SECONDS: 0,
+    });
+  });
+
+  it('rejects a malformed token lifetime, weak hashing cost and zero limits', () => {
+    expect(() => validateEnv({ ...base, JWT_EXPIRES_IN: 'soon' })).toThrow(
+      /JWT_EXPIRES_IN must look like/,
+    );
+    expect(() => validateEnv({ ...base, BCRYPT_ROUNDS: '2' })).toThrow(
+      /BCRYPT_ROUNDS must be an integer between 4 and 15/,
+    );
+    expect(() => validateEnv({ ...base, THROTTLE_AUTH_LIMIT: '0' })).toThrow(
+      /THROTTLE_AUTH_LIMIT must be an integer/,
+    );
+  });
 });
