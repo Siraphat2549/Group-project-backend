@@ -3,6 +3,7 @@ import { validateEnv } from './env.validation';
 const base = {
   DATABASE_URL: 'mysql://user:secret@localhost:3306/hotel_booking',
   REDIS_URL: 'redis://localhost:6379',
+  JWT_SECRET: 'x'.repeat(32),
 };
 
 describe('validateEnv', () => {
@@ -45,5 +46,18 @@ describe('validateEnv', () => {
     } catch (error) {
       expect((error as Error).message).not.toContain(secret);
     }
+  });
+
+  it('requires a JWT_SECRET of at least 32 characters', () => {
+    expect(() => validateEnv({ ...base, JWT_SECRET: undefined })).toThrow(
+      /JWT_SECRET is required/,
+    );
+    expect(() => validateEnv({ ...base, JWT_SECRET: 'short' })).toThrow(
+      /JWT_SECRET must be at least 32 characters/,
+    );
+  });
+
+  it('defaults UPLOAD_DIR to "uploads"', () => {
+    expect(validateEnv(base).UPLOAD_DIR).toBe('uploads');
   });
 });

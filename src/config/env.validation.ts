@@ -8,7 +8,11 @@ export interface EnvironmentVariables {
   REDIS_URL: string;
   HEALTH_CHECK_TIMEOUT_MS: number;
   CORS_ORIGIN?: string;
+  JWT_SECRET: string;
+  UPLOAD_DIR: string;
 }
+
+export const MIN_JWT_SECRET_LENGTH = 32;
 
 type RawEnv = Record<string, unknown>;
 
@@ -95,7 +99,17 @@ export function validateEnv(env: RawEnv): EnvironmentVariables & RawEnv {
       },
     ),
     CORS_ORIGIN: readString(env, 'CORS_ORIGIN'),
+    JWT_SECRET: readString(env, 'JWT_SECRET') ?? '',
+    UPLOAD_DIR: readString(env, 'UPLOAD_DIR') ?? 'uploads',
   };
+
+  if (!validated.JWT_SECRET) {
+    errors.push('JWT_SECRET is required');
+  } else if (validated.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+    errors.push(
+      `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters`,
+    );
+  }
 
   if (errors.length > 0) {
     throw new Error(

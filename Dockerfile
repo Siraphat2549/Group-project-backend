@@ -20,6 +20,10 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/prisma ./prisma
+
+# Writable dir for uploaded room images (mount a volume here in production).
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 
 # Never run as root in production.
 USER node

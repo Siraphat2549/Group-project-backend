@@ -1,0 +1,113 @@
+// Shared schema for the whole team (User / Room / RoomImage / Booking /
+// NotificationEvent). Change it only via a migration: `npm run prisma:migrate`.
+
+generator client {
+  provider = "prisma-client-js"
+  // linux-musl for the node:alpine Docker image.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+  PAID
+}
+
+enum NotificationType {
+  BOOKING_CREATED
+  BOOKING_CANCELLED
+  BOOKING_STATUS_CHANGED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(100)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bookings      Booking[]
+  notifications NotificationEvent[]
+}
+
+model Room {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique @db.VarChar(100)
+  description   String?  @db.Text
+  capacity      Int
+  pricePerNight Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  images   RoomImage[]
+  bookings Booking[]
+
+  @@index([isActive, capacity])
+}
+
+model RoomImage {
+  id           Int      @id @default(autoincrement())
+  roomId       Int
+  url          String   @db.VarChar(500)
+  // Stored file name on disk (null when the image is an external URL).
+  fileName     String?  @db.VarChar(255)
+  originalName String?  @db.VarChar(255)
+  mimeType     String?  @db.VarChar(100)
+  sizeBytes    Int?
+  createdAt    DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+}
+
+model Booking {
+  id         Int           @id @default(autoincrement())
+  userId     Int
+  roomId     Int
+  checkIn    DateTime
+  checkOut   DateTime
+  guests     Int           @default(1)
+  totalPrice Decimal       @db.Decimal(10, 2)
+  status     BookingStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  // Restrict: booking history must not disappear when a user/room is removed (NFR-8).
+  user          User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  room          Room                @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  notifications NotificationEvent[]
+
+  // Overlap / availability lookups.
+  @@index([roomId, status, checkIn, checkOut])
+  @@index([userId, createdAt])
+}
+
+model NotificationEvent {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  bookingId Int
+  type      NotificationType
+  message   String           @db.VarChar(255)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}

@@ -3,8 +3,9 @@
 REST API for a hotel booking system (NestJS · MySQL · Redis · Docker).
 Spec: FR-1…FR-38, NFR-1…NFR-20 (ITCS258 Hotel Booking Specification).
 
-> **Status:** scaffold only — config, health check, Docker. Feature modules
-> (auth, rooms, bookings, search, notifications, Swagger) are added next.
+> **Status:** config, health check, Docker, Prisma schema, rooms, bookings,
+> search and notifications are in. Auth endpoints (sign-up/login/logout/profile),
+> caching, rate limiting and Swagger are next.
 
 ## Tech stack
 
@@ -108,18 +109,90 @@ On failure the response is `503` with the failing dependency under `error`
 (e.g. `{ "status": "down", "message": "ECONNREFUSED" }`). Connection strings
 and credentials are never included in responses or logs.
 
+## Database (Prisma)
+
+Schema: [prisma/schema.prisma](prisma/schema.prisma) — `User`, `Room`, `RoomImage`,
+`Booking`, `NotificationEvent`. Migrations live in `prisma/migrations/`.
+
+```bash
+npm run prisma:migrate   # dev: create + apply a migration after editing the schema
+npm run prisma:deploy    # prod/CI: apply pending migrations
+npm run prisma:generate  # regenerate the client (also runs in `npm run build`)
+```
+
+## API — rooms, bookings, search, notifications
+
+All bodies are JSON. Mutations answer `{ "message", "data" }` (FR-34), detail
+reads `{ "data" }`, lists `{ "data": [...], "meta": { page, limit, total, totalPages } }`.
+Errors use Nest's shape `{ "statusCode", "message", "error" }` with a readable
+`message` (FR-32/33). Auth = `Authorization: Bearer <JWT>`.
+
+| Method & path | Who | Notes |
+|---|---|---|
+| `GET /rooms` | public | `page, limit, capacity` (min guests), `minPrice, maxPrice`; admin may add `includeInactive=true` |
+| `GET /rooms/search` | public | **required** `checkIn, checkOut` + same filters; only rooms free for the whole stay (FR-27–29) |
+| `GET /rooms/:id` | public | includes `images[]` (FR-16); deactivated rooms → 404 except for admin |
+| `POST /rooms` | admin | `{ name, description?, capacity (1–20), pricePerNight, isActive? }` → 201 |
+| `PATCH /rooms/:id` | admin | any subset; `{ "isActive": false }` deactivates (FR-10) |
+| `DELETE /rooms/:id` | admin | only if the room was never booked, else 409 → deactivate instead |
+| `POST /rooms/:id/images` | admin | `multipart/form-data`, field `image`, JPEG/PNG/WebP ≤ 5 MB, max 10/room; served at `/uploads/rooms/<uuid>.<ext>` |
+| `DELETE /rooms/:id/images/:imageId` | admin | removes metadata + file |
+| `POST /bookings` | user | `{ roomId, checkIn, checkOut, guests? }` → 201, status `PENDING`, `totalPrice = nights × pricePerNight` |
+| `GET /bookings` | user / admin | user: own only · admin: all, filters `status, roomId, userId` |
+| `GET /bookings/:id` | owner / admin | other users → 403 |
+| `PATCH /bookings/:id/cancel` | owner / admin | owner may cancel `PENDING`/`APPROVED`; admin any non-cancelled |
+| `PATCH /bookings/:id/status` | admin | `{ "status": "APPROVED" }` (or `PAID`, `CANCELLED`) |
+| `GET /notifications` | user | own events, `unread=true`; admin may add `all=true`; `meta.unreadCount` |
+| `PATCH /notifications/:id/read` · `PATCH /notifications/read-all` | user | |
+
+**Booking rules**
+
+- Dates are ISO 8601 (`2026-12-01` or `2026-12-01T14:00:00+07:00`). `checkIn < checkOut`,
+  `checkIn` not in the past, stay ≤ 30 nights → otherwise **400** (FR-19).
+- Stays are half-open `[checkIn, checkOut)`: a stay may start the moment the previous
+  one ends. Any overlap with a `PENDING`/`APPROVED`/`PAID` booking → **409** (FR-20).
+  `CANCELLED` bookings free the slot.
+- Concurrency-safe: creation locks the room row (`SELECT … FOR UPDATE`) inside the
+  transaction, so parallel requests for the same slot yield exactly one 201
+  (covered by an e2e test with 8 parallel requests).
+- Status flow (FR-21/26): `PENDING → APPROVED → PAID`, and any of them → `CANCELLED`
+  (final). Illegal transitions → **409** with the allowed targets in the message.
+- Every create / cancel / status change writes a `NotificationEvent` for the booking
+  owner in the **same transaction** (FR-30/31): `BOOKING_CREATED`,
+  `BOOKING_CANCELLED`, `BOOKING_STATUS_CHANGED`.
+
+```bash
+# search, then book (TOKEN from login)
+curl "http://localhost:3000/rooms/search?checkIn=2026-12-01&checkOut=2026-12-03&capacity=2"
+curl -X POST http://localhost:3000/bookings -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"roomId":1,"checkIn":"2026-12-01","checkOut":"2026-12-03","guests":2}'
+# upload a room image (admin)
+curl -X POST http://localhost:3000/rooms/1/images -H "Authorization: Bearer $ADMIN_TOKEN" -F image=@room.jpg
+```
+
 ## Tests
 
 ```bash
 npm test          # unit
-npm run test:e2e  # e2e (no DB required for the health suite)
+npm run test:e2e  # e2e — health suite needs no DB; the rooms/bookings suite
+                  # runs against DATABASE_URL (migrate it first) and is skipped if unset
 npm run test:cov
 ```
 
 ## Notes for teammates
 
-- Once Prisma is added, swap the MySQL probe for terminus'
-  `PrismaHealthIndicator.pingCheck('database', prisma)` and add
-  `npx prisma generate` to the Dockerfile build stage.
-- Env keys for JWT / cache / throttling are already reserved in `.env.example`;
-  add them to `src/config/env.validation.ts` when the modules use them.
+- **Auth contract** ([src/auth/](src/auth/)): guards + decorators exist; login must sign
+  JWTs with payload `{ sub: userId, email, role }` (see `JwtPayload`). Add the
+  sign-up/login/logout/profile controller + service to `AuthModule`. A logout
+  blacklist check belongs in `JwtAuthGuard`.
+- `JWT_SECRET` (≥ 32 chars) and `UPLOAD_DIR` are validated in `env.validation.ts`;
+  cache / throttling keys are still reserved in `.env.example`.
+- Docker: `npm run build` already runs `prisma generate`; the runtime image still
+  needs `prisma migrate deploy` on release (the `prisma` CLI is a devDependency and is
+  pruned, so run it from the build stage or a one-off job). Not yet verified in Docker.
+- Caching: invalidate the room list/detail cache in `RoomsService`
+  create/update/remove/addImage/removeImage, and on booking create/cancel for
+  `/rooms/search` results.
+- Health: the MySQL probe can be swapped for terminus'
+  `PrismaHealthIndicator.pingCheck('database', prisma)`.
