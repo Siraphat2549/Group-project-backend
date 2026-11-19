@@ -21,9 +21,9 @@ CI (`.github/workflows/test.yml`) runs lint, all three levels and the strict
 OpenAPI check on every push and pull request, against real MySQL 8.4 and
 Redis 7.
 
-## 2. Test environment
+## 2. Test Environment
 
-### Test database
+### Test Database
 
 `docker-compose.test.yml` starts a **separate, disposable** MySQL 8.4 + Redis 7
 on ports **3307 / 6380** (the dev stack uses 3306 / 6379). Data lives in RAM
@@ -38,7 +38,7 @@ and disappears when the containers stop.
 | `UPLOAD_DIR` | `<os tmp>/hotel-booking-test-uploads` — test images never land in `uploads/` | env |
 | `JWT_SECRET`, `JWT_EXPIRES_IN` | test-only secret, `15m` | env |
 
-**Safety guards**
+**Safety Checks**
 
 1. During tests, `DATABASE_URL` and `REDIS_URL` are always replaced with the
    test values. They are never taken from `.env` or the shell
@@ -46,7 +46,7 @@ and disappears when the containers stop.
 2. Tests refuse to start unless the database name ends in `_test`.
 3. The cleanup helper checks `SELECT DATABASE()` again before deleting rows.
 
-### Lifecycle and cleanup
+### Lifecycle and Cleanup
 
 | When | What happens | Where |
 |---|---|---|
@@ -90,14 +90,14 @@ npm run test:all           # test DB + all three levels in one command (needs Do
 
 Run a single file: `npx jest --config ./test/jest-integration.json test/integration/bookings.int-spec.ts`.
 
-## 4. Test cases
+## 4. Test Cases
 
 Integration and E2E IDs appear in the test names, so every row can be found
 with a search (e.g. `IT-BK-15`). Unit rows name the spec file; the newer unit
 tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROOM`,
-`UT-IMG`, `UT-NOTIF`, `UT-DOC`, `UT-HARN`) carry the ID in their name too.
+`UT-IMG`, `UT-NOTIF`, `UT-DOC`, `UT-HARN`) also have the ID in their names.
 
-### 4.1 Unit — core business logic (`npm test`)
+### 4.1 Unit — Core Business Logic (`npm test`)
 
 **Date validation (FR-19)** — `src/common/utils/date-range.spec.ts`, `src/bookings/bookings.service.spec.ts`
 
@@ -108,7 +108,7 @@ tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROO
 | UT-DATE-03 | invalid date strings; stay longer than 30 nights | 400 | ✅ |
 | UT-DATE-04 | nights counted in whole days, partial days rounded up | correct count | ✅ |
 
-**No double booking (FR-20)** — `src/common/utils/date-range.spec.ts`, `src/bookings/bookings.service.spec.ts`
+**No Double Booking (FR-20)** — `src/common/utils/date-range.spec.ts`, `src/bookings/bookings.service.spec.ts`
 
 | ID | Case | Expected | Status |
 |---|---|---|---|
@@ -172,9 +172,9 @@ tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROO
 
 **Platform** — cache (`http-cache.interceptor.spec.ts`, 9), rate limiter storage (6), env validation (10), MySQL/Redis probes (5), OpenAPI checker UT-DOC-01…06 (6), test harness UT-HARN-01…09 (11) | all ✅
 
-### 4.2 Integration — endpoints + real test DB (`npm run test:integration`)
+### 4.2 Integration — Endpoints + Real Test DB (`npm run test:integration`)
 
-**Users & auth — `auth.int-spec.ts` (FR-1–5, NFR-1, NFR-4)**
+**Users & Auth — `auth.int-spec.ts` (FR-1–5, NFR-1, NFR-4)**
 
 | ID | Case | Expected | Status |
 |---|---|---|---|
@@ -254,8 +254,7 @@ tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROO
 | IT-NOTIF-04 | — | mark all as read | only the caller's unread events | ✅ |
 | IT-HLTH-01 | FR-36 | `GET /health` with MySQL + Redis up; `/health/live` | 200, every check `up`, no credentials | ✅ |
 
-**Rate limiting — `rate-limit.int-spec.ts` (Task 4; limits lowered to 3 / 2)**
-
+**Rate Limiting — `rate-limit.int-spec.ts` 
 | ID | Case | Expected | Status |
 |---|---|---|---|
 | IT-RL-01 | `POST /auth/login` beyond the limit | 401 ×3 with `X-RateLimit-*`, then 429 with `Retry-After`; other routes still 200 | ✅ |
@@ -273,7 +272,7 @@ tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROO
 | E2E-04 | second user books an overlapping range | 409; one active booking in DB; search hides the room; free right after check-out | ✅ |
 | E2E-05 | update profile → log out → reuse token → log in again | 200, then 401 (also for writes); new login works, name kept | ✅ |
 
-**Module E2E suites** (written with the features, real DB)
+**Module E2E suites** 
 
 | File | Tests | Covers | Status |
 |---|---|---|---|
@@ -282,7 +281,7 @@ tests (`UT-BK`, `UT-CONF-00…02`, `UT-STAT-03…08`, `UT-ROLE-03…06`, `UT-ROO
 | `test/health.e2e-spec.ts` | 2 | E2E-HLTH-01 liveness without dependencies; E2E-HLTH-02 503 per dependency, no credentials | ✅ |
 | `test/e2e/swagger.e2e-spec.ts` | 2 | E2E-DOC-01 `/docs` serves Swagger UI; E2E-DOC-02 `/docs-json` is OpenAPI 3 with JWT bearer auth | ✅ |
 
-### 4.4 Requirement coverage
+### 4.4 Requirement Coverage
 
 | Requirement | Unit | Integration | E2E |
 |---|---|---|---|
@@ -327,10 +326,7 @@ Test Suites: 5 passed, 5 total
 Tests:       63 passed, 63 total
 ```
 
-**Unit coverage** (`npm run test:cov`): statements 72.9 % · branches 74.3 % ·
-functions 60.8 % · lines 73.5 %. The business-logic files the rubric names
-are covered almost completely; the rest of the gap is wiring (modules,
-controllers, `main.ts`), which the integration and E2E levels exercise.
+**Unit Coverage** (`npm run test:cov`):statements 72.9 % · branches 74.3 % · functions 60.8 % · lines 73.5 %. The business logic files named in the rubric are almost fully covered. Most of what's left is setup code (modules, controllers, `main.ts`), and the integration and E2E tests cover that.
 
 | File | Statements | Branches |
 |---|---|---|
@@ -366,16 +362,15 @@ with the deployed test accounts (see README → Deployment), after the latest
 
 ## 6. Decisions the tests encode
 
-These were open questions while the tests were being planned; the answers
-below are what the API does and what the tests assert.
+These questions were still open when we planned the tests. The answers below are how the API works, and the tests check them.
 
 | # | Question | Decision | Tests |
 |---|---|---|---|
 | 1 | Is a back-to-back booking allowed (new check-in = existing check-out)? | **Yes** — stays are half-open `[checkIn, checkOut)` | IT-BK-12, IT-SRCH-06, UT-CONF-04 |
-| 2 | Status for viewing another user's booking | **403** | IT-BK-22, UT-ROLE-03 |
-| 3 | Allowed status changes and who makes them | PENDING→APPROVED/CANCELLED, APPROVED→PAID/CANCELLED, PAID→CANCELLED; CANCELLED is final. User: cancel own PENDING/APPROVED. Admin: everything | IT-BK-24…30, UT-STAT-* |
-| 4 | Status for an illegal transition | **409**, message lists the allowed targets | IT-BK-29, UT-STAT-02/03 |
-| 5 | Booking a deactivated room | **404** (the room is hidden, so it looks like it does not exist) | IT-BK-05, IT-ROOM-07 |
-| 6 | Does logout revoke the JWT? | **Yes** — the token id is stored in Redis until the token expires | IT-AUTH-09, E2E-05 |
-| 7 | Field name of the token in the login response | `data.accessToken` | IT-AUTH-04 |
-| 8 | Status for an image over 5 MB | **413** (the upload limit rejects it before the API code runs); wrong type or no file → 400 | IT-ROOM-09 |
+| 2 | What status code when viewing another user's booking? | **403** | IT-BK-22, UT-ROLE-03 |
+| 3 | Which status changes are allowed, and who can make them? | PENDING→APPROVED/CANCELLED, APPROVED→PAID/CANCELLED, PAID→CANCELLED. CANCELLED is final. Users can cancel their own PENDING or APPROVED bookings. Admins can make any allowed change | IT-BK-24…30, UT-STAT-* |
+| 4 | What status code for a change that isn't allowed | **409**, message lists the allowed targets | IT-BK-29, UT-STAT-02/03 |
+| 5 | What happens when booking a deactivated room? | **404** (the room is hidden, so it looks like it does not exist) | IT-BK-05, IT-ROOM-07 |
+| 6 | Does logging out cancel the JWT? | **Yes** — the token id is stored in Redis until the token expires | IT-AUTH-09, E2E-05 |
+| 7 | What is the token field called in the login response? | `data.accessToken` | IT-AUTH-04 |
+| 8 | What status code for an image over 5 MB? | **413** (the upload limit rejects it before the API code runs); wrong type or no file → 400 | IT-ROOM-09 |
