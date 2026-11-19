@@ -3,10 +3,12 @@
 REST API for a hotel booking system (NestJS · MySQL · Redis · Docker).
 Spec: FR-1…FR-38, NFR-1…NFR-20 (ITCS258 Hotel Booking Specification).
 
-> **Status:** config, health check, Docker, Prisma schema + seed, auth
-> (sign-up/login/logout/profile), RBAC, rooms, bookings, search, notifications,
-> Redis caching, rate limiting and request logging are in. Swagger and the
-> public deployment are next.
+> **Status:** all features are in — auth (sign-up/login/logout/profile), RBAC,
+> rooms + images, bookings, search, notifications, health check, Redis caching,
+> rate limiting, logging, Swagger docs and Docker. 304 automated tests (unit,
+> integration, E2E) pass. Deployed on Railway:
+> **<https://group-project-backend-production-7db1d7b7.up.railway.app/docs>**
+> (see [Deployment](#deployment)).
 
 ## Tech stack
 
@@ -44,11 +46,12 @@ src/
   common/                 # pagination, date ranges, Prisma error filter, request logger
   database/seed.ts        # admin + demo user + sample rooms
 test/
-  *.e2e-spec.ts           # health, auth/RBAC/cache/rate limit, rooms + bookings
+  integration/            # *.int-spec.ts - each module's endpoints, real test DB
+  e2e/                    # *.e2e-spec.ts - full user/admin journeys + Swagger
+  *.e2e-spec.ts           # module E2E suites: health, auth/RBAC/cache/rate limit, rooms + bookings
   setup/                  # test env (test-DB guard) + global setup (schema reset)
-  utils/                  # createTestApp, DB cleanup, fixtures
-  integration/            # *.int-spec.ts - per module, real test DB
-  e2e/                    # *.e2e-spec.ts - full user journeys
+  utils/                  # createTestApp, factories (users/rooms/bookings), DB cleanup, fixtures
+src/**/*.spec.ts          # unit tests next to the code they test
 docs/
   API-TESTING.md          # API Testing document: strategy, test cases, results
   openapi.json            # exported OpenAPI spec (npm run openapi)
@@ -120,11 +123,17 @@ the host for development but never from the network.
 
 ```bash
 npm ci
+npx prisma generate          # build the Prisma client (generated code)
 docker compose up -d mysql redis
 npm run prisma:deploy        # create the tables
 npm run seed                 # optional: admin + demo user + sample rooms
-npm run start:dev
+npm run start:dev            # http://localhost:3000/docs
 ```
+
+**Port already in use?** If MySQL or Redis is installed on your machine (e.g.
+the Windows `MySQL80` service holds 3306), set `MYSQL_HOST_PORT=3308` (or
+`REDIS_HOST_PORT`) in `.env` and use the same port in `DATABASE_URL` /
+`REDIS_URL`. Inside Docker the API still uses 3306.
 
 ### Build & run the production image only
 
@@ -191,7 +200,7 @@ Errors use Nest's shape `{ "statusCode", "message", "error" }` with a readable
 | `POST /rooms` | admin | `{ name, description?, capacity (1–20), pricePerNight, isActive? }` → 201 |
 | `PATCH /rooms/:id` | admin | any subset; `{ "isActive": false }` deactivates (FR-10) |
 | `DELETE /rooms/:id` | admin | only if the room was never booked, else 409 → deactivate instead |
-| `POST /rooms/:id/images` | admin | `multipart/form-data`, field `image`, JPEG/PNG/WebP ≤ 5 MB, max 10/room; served at `/uploads/rooms/<uuid>.<ext>` |
+| `POST /rooms/:id/images` | admin | `multipart/form-data`, field `image`, JPEG/PNG/WebP ≤ 5 MB (larger → 413, other types → 400), max 10/room; served at `/uploads/rooms/<uuid>.<ext>` |
 | `DELETE /rooms/:id/images/:imageId` | admin | removes metadata + file |
 | `POST /bookings` | user | `{ roomId, checkIn, checkOut, guests? }` → 201, status `PENDING`, `totalPrice = nights × pricePerNight` |
 | `GET /bookings` | user / admin | user: own only · admin: all, filters `status, roomId, userId` |
@@ -388,13 +397,82 @@ to reset the two passwords).
 These defaults exist only for local development. With `NODE_ENV=production`
 the seed refuses to run unless `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`,
 `SEED_USER_EMAIL` and `SEED_USER_PASSWORD` are set, so a public server never
-gets a publicly known login.
+gets a publicly known login. The accounts on the deployed API are listed under
+[Deployment](#deployment).
 
 ## Deployment
 
-> **Not deployed yet** - the public URL and the deployed test accounts will be
-> added here once the server is available. The steps below are the intended
-> procedure for a Linux VM (e.g. AWS EC2 / the course VM) with Docker.
+The API is deployed on **[Railway](https://railway.com)** (container platform),
+built from this repository's `Dockerfile`.
+
+| | URL |
+|---|---|
+| API base URL | <https://group-project-backend-production-7db1d7b7.up.railway.app> |
+| Swagger UI | <https://group-project-backend-production-7db1d7b7.up.railway.app/docs> |
+| OpenAPI JSON | <https://group-project-backend-production-7db1d7b7.up.railway.app/docs-json> |
+| Health check | <https://group-project-backend-production-7db1d7b7.up.railway.app/health> |
+
+**Test accounts on the deployed API**
+
+| Role | Email |
+|---|---|
+| Admin | `admin@hotel.test` |
+| Regular User | `user@hotel.test` |
+
+The passwords are **not** stored in this repository; they are given in the
+submission note. (The deployed accounts use their own passwords set through
+`SEED_*`, not the development defaults.) You can also register a new Regular
+User with `POST /auth/register`.
+
+### Architecture
+
+```
+Internet ──HTTPS──► Railway edge proxy ──► api service  (Docker image from ./Dockerfile, runs as `node`)
+                                             ├──► MySQL 8.4 service  (Railway private network + volume)
+                                             ├──► Redis service      (Railway private network)
+                                             └──► /app/uploads       (Railway volume: room images)
+```
+
+The container starts with `docker-entrypoint.sh`: apply pending migrations
+→ (optionally) seed → start the API. Logs are JSON lines (`NODE_ENV=production`)
+in Railway's log view; `GET /health` reports app + MySQL + Redis for
+monitoring (e.g. UptimeRobot).
+
+### Deploying to Railway, step by step
+
+> These are the standard Railway steps for this repository. SOR set up the
+> live deployment; **confirm the exact settings with SOR** when changing it.
+
+1. **Project:** Railway → *New Project* → *Deploy from GitHub repo* → this
+   repository, branch `main`. Railway detects the `Dockerfile` and builds it.
+2. **Databases:** in the project, *+ New* → *Database* → **MySQL**, and again
+   → **Redis**.
+3. **Variables** of the API service (*Variables* tab):
+
+   | Variable | Value |
+   |---|---|
+   | `NODE_ENV` | `production` |
+   | `DATABASE_URL` | `${{MySQL.MYSQL_URL}}` (reference to the MySQL service) |
+   | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
+   | `JWT_SECRET` | random, ≥ 32 chars: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+   | `TRUST_PROXY` | `1` — Railway's proxy sits in front; without it every client shares one rate-limit budget |
+   | `RUN_SEED` | `true` for the first deploy (the seed is idempotent) |
+   | `SEED_ADMIN_EMAIL` `SEED_ADMIN_PASSWORD` `SEED_USER_EMAIL` `SEED_USER_PASSWORD` | the test accounts (required in production) |
+   | `CORS_ORIGIN` | the frontend's origin, if there is one |
+
+   `PORT` is injected by Railway and the app listens on it.
+4. **Uploads volume:** *+ New* → *Volume*, attach it to the API service at
+   `/app/uploads`, so room images survive redeploys. (If uploads then fail
+   with a permission error, the volume is root-owned while the container runs
+   as `node`: set `RAILWAY_RUN_UID=0`.)
+5. **Networking & health:** *Settings* → *Networking* → *Generate Domain*;
+   *Settings* → *Deploy* → *Healthcheck Path* = `/health`.
+6. **Verify:** `curl https://<domain>/health` returns `"status":"ok"`, then run
+   the smoke test in [docs/API-TESTING.md](docs/API-TESTING.md#manual-smoke-test-on-the-deployed-url).
+7. **Updates:** every push to `main` redeploys automatically; migrations are
+   applied on start.
+
+### Alternative: a Linux VM with Docker Compose
 
 Architecture: one VM running Docker Compose.
 
@@ -409,7 +487,7 @@ Internet -> :3000 api (NestJS, node user) -> mysql:3306  (volume mysql-data)
    security group. Do **not** open 3306 or 6379.
 2. Get the code and create the configuration:
    ```bash
-   git clone <repo-url> hotel-booking && cd hotel-booking
+   git clone <this repository's URL> hotel-booking && cd hotel-booking
    cp .env.example .env
    ```
    In `.env` set `NODE_ENV=production`, a random `JWT_SECRET`
@@ -433,8 +511,8 @@ service.
 
 | | URL |
 |---|---|
-| Swagger UI | `http://localhost:3000/docs` · deployed: `<DEPLOYED_URL>/docs` |
-| OpenAPI JSON | `http://localhost:3000/docs-json` |
+| Swagger UI | `http://localhost:3000/docs` · deployed: <https://group-project-backend-production-7db1d7b7.up.railway.app/docs> |
+| OpenAPI JSON | `http://localhost:3000/docs-json` · deployed: <https://group-project-backend-production-7db1d7b7.up.railway.app/docs-json> |
 | Spec file | [`docs/openapi.json`](docs/openapi.json) — regenerate with `npm run openapi` |
 
 **Authenticating in Swagger UI**
@@ -453,13 +531,16 @@ missing a summary, tag, success response, `401` (auth required) or `400`
 Shared helpers are in `src/swagger/`:
 
 ```ts
-@ApiTags(ApiTag.Bookings)
 @Controller('bookings')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class BookingsController {
   @Post()
   @ApiOperation({ summary: 'Create a booking' })
-  @ApiCreatedResponse({ type: BookingResponseDto })
   @ApiAuth()                                   // lock icon + 401
+  @ApiDataResponse(201, BookingResponseDto, {  // { message, data }
+    description: 'Booking created with status PENDING',
+    message: 'Booking created successfully',
+  })
   @ApiValidationError()                        // 400
   @ApiNotFound('Room')                         // 404
   @ApiConflict('Room already booked for this time range') // 409
@@ -468,64 +549,82 @@ export class BookingsController {
 }
 ```
 
-`@ApiAdminOnly()` = 401 + 403 for Admin routes, `@ApiOwnerOnly()` for
-"own booking only" routes, `@ApiImageUpload()` for the room image upload.
-Give every DTO field an `@ApiProperty()` (with an `example`) so request and
-response schemas show in Swagger. All errors use `ErrorResponseDto`.
+| Helper | Use for |
+|---|---|
+| `@ApiAuth()` | route behind `JwtAuthGuard`: lock icon + 401 |
+| `@ApiAdminOnly()` / `@ApiOwnerOnly()` | + 403 (not Admin / not your booking) |
+| `@ApiOptionalAuth()` | route behind `OptionalJwtAuthGuard` (token optional, no 401) |
+| `@ApiDataResponse(status, Dto, …)` | `{ message?, data }` success response |
+| `@ApiPaginatedResponse(Dto, …)` | `{ data: [], meta }` list response |
+| `@ApiMessageResponse(status, …)` | `{ message }` only (delete, logout) |
+| `@ApiImageUpload()` | multipart file upload body |
+
+Every protected route **must** have `@ApiAuth()` (or Admin/Owner) — otherwise
+Swagger UI does not send the token and the route answers 401 there. The unit
+test `src/swagger/swagger-auth.spec.ts` fails if a guard and its docs disagree.
+Give every DTO field an `@ApiProperty()` (with an `example`); response DTOs
+(`*-response.dto.ts`) `implements` the mapper interface so they cannot drift
+from the real response. Use `PartialType` from `@nestjs/swagger`, not
+`@nestjs/mapped-types`. All errors use `ErrorResponseDto`.
 
 ## Tests
 
-Full strategy, test cases mapped to each FR, and results:
+The **API Testing document** — strategy, every test case mapped to the FRs,
+decisions and the latest results — is
 **[docs/API-TESTING.md](docs/API-TESTING.md)**.
 
-| Level | Command | Needs |
-|---|---|---|
-| Unit — business logic, mocked dependencies | `npm test` · `npm run test:cov` | nothing |
-| Integration — each module's endpoints, real test DB | `npm run test:integration` | test DB |
-| E2E — full user/admin journeys, checks responses + DB state | `npm run test:e2e` | test DB |
-| **Everything** (starts the test DB first) | `npm run test:all` | Docker |
+| Level | What | Where | Command | Needs |
+|---|---|---|---|---|
+| Unit | business logic with mocked dependencies: date validation, double booking (overlap + row lock), status flow, roles/ownership, hashing, images, cache, rate limiter | `src/**/*.spec.ts` | `npm test` · `npm run test:cov` | nothing |
+| Integration | each module's endpoints over HTTP, real test DB + Redis: auth, rooms CRUD + images, bookings + conflicts (incl. concurrent requests), search, notifications, rate limiting, health | `test/integration/` | `npm run test:integration` | test DB |
+| E2E | user/admin journeys (sign-up → search → book → cancel, approve → paid, RBAC, double booking, logout), checking responses **and** DB state | `test/e2e/`, `test/*.e2e-spec.ts` | `npm run test:e2e` | test DB |
+| **Everything** | starts the test DB, runs all three levels | | `npm run test:all` | Docker |
 
 ```bash
+npm ci && npx prisma generate
 npm run test:all       # starts test MySQL :3307 + Redis :6380, runs all 3 levels
 npm run test:db:down   # stop the test containers and wipe their data
 ```
 
+**Latest results (2026-11-19): 304 / 304 passing** — unit 159 · integration
+82 · E2E 63; unit coverage 73 % of statements (100 % for the booking, status
+and date-validation logic). Details in
+[API-TESTING.md §5](docs/API-TESTING.md#5-results).
+
 - Tests use a separate database, `hotel_booking_test`, in
   `docker-compose.test.yml` (RAM only). They **refuse to run** against any
   database whose name does not end in `_test`, so dev/production data is safe.
-- The schema is rebuilt once per run, and every table is emptied before each
-  test (`test/utils/db-cleanup.ts`), so tests never depend on each other.
-- CI (`.github/workflows/test.yml`) runs all three levels against real MySQL
-  and Redis on every push and pull request.
-
-| E2E suite | Covers |
-|---|---|
-| `test/health.e2e-spec.ts` | liveness / readiness, no credentials in responses |
-| `test/auth.e2e-spec.ts` | sign-up, login, logout (token revocation), profile, RBAC with real logins, cache HIT/MISS + invalidation, 429 rate limit |
-| `test/rooms-bookings.e2e-spec.ts` | rooms, bookings, double-booking, search, notifications |
-
-If the test Redis is not running, the same suites still pass on the
-fallbacks (cache off, in-memory rate limit, logout answers 503).
+- The schema is rebuilt once per run, and every table plus the test Redis is
+  emptied before each test (`test/utils/db-cleanup.ts`), so tests never
+  depend on each other or on the order they run in.
+- CI (`.github/workflows/test.yml`) runs lint, all three levels and the strict
+  OpenAPI check against real MySQL and Redis on every push and pull request.
 
 ## Notes for teammates
 
-- **Swagger (Earn)**: `helmet` is configured with CSP off so Swagger UI works.
-  Auth is a Bearer JWT (`addBearerAuth()`); the DTOs are in `src/auth/dto/` and
-  `src/users/dto/`. Document the `429` response and the `X-Cache` /
-  `X-RateLimit-*` headers.
+- **Swagger**: `helmet` is configured with CSP off so Swagger UI works. Every
+  new endpoint needs the decorators in
+  [Documenting an endpoint](#documenting-an-endpoint-for-teammates);
+  `npm run openapi:check` (also in CI) fails otherwise.
+- **New tests**: use `test/utils/factories.ts` (`createActor`, `createRoom`,
+  `book`, `stay`) and call `resetTestState()` in `beforeEach`; keep the test
+  ID from `docs/API-TESTING.md` in the test name.
 - **New cached GET or mutation?** Add `@CachedResponse('rooms')` to public
   room reads and `@InvalidatesCache('rooms' | 'bookings')` to anything that
   changes them (see `rooms.controller.ts`, `bookings.controller.ts`).
 - **New sensitive route?** Add `@RateLimit('auth' | 'booking')`.
-- **Tests that send many requests** should raise `THROTTLE_*` in
-  `process.env` before importing `AppModule` (see the e2e suites).
+- **Tests that change limits** must set `THROTTLE_*` in `process.env`
+  before `AppModule` is imported (see `test/integration/rate-limit.int-spec.ts`).
 - Health: the MySQL probe can be swapped for terminus'
   `PrismaHealthIndicator.pingCheck('database', prisma)`.
 
 ## Limitations / known issues
 
-- Not deployed yet; the Docker image has not been built on this machine
-  (no Docker available), only the compiled app was run against MySQL + Redis.
+- The deployment runs a single API instance on Railway. Uploaded images live
+  on that service's volume; running several instances would need shared or
+  object storage for `/uploads` (see the last point).
+- No payment integration: `PAID` is set by an Admin (FR-26), not by a payment
+  provider.
 - Logout and "sign out everywhere" depend on Redis. If Redis is down, logout
   answers 503, and already-revoked tokens are accepted again until they expire
   (at most `JWT_EXPIRES_IN`) - chosen so a cache outage cannot lock everyone

@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
@@ -22,17 +23,31 @@ export const PASSWORD_RULE =
 
 /** FR-1. The role is never accepted from the client: sign-up always creates a Regular User. */
 export class RegisterDto {
+  @ApiProperty({ example: 'Alice', maxLength: 100 })
   @Transform(trim)
   @IsString()
   @IsNotEmpty({ message: 'name is required' })
   @MaxLength(100)
   name!: string;
 
+  @ApiProperty({
+    example: 'alice@example.com',
+    format: 'email',
+    maxLength: 255,
+    description: 'Case-insensitive; must not be registered yet',
+  })
   @Transform(normalizeEmail)
   @IsEmail({}, { message: 'email must be a valid email address' })
   @MaxLength(255)
   email!: string;
 
+  @ApiProperty({
+    example: 'Secret123',
+    format: 'password',
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
+    description: 'At least one letter and one number',
+  })
   @IsString()
   @MinLength(PASSWORD_MIN_LENGTH, { message: PASSWORD_RULE })
   @MaxLength(PASSWORD_MAX_LENGTH, { message: PASSWORD_RULE })
@@ -42,11 +57,13 @@ export class RegisterDto {
 
 /** FR-2. No password rules here: an old or wrong password is simply a 401. */
 export class LoginDto {
+  @ApiProperty({ example: 'user@hotel.test', format: 'email' })
   @Transform(normalizeEmail)
   @IsEmail({}, { message: 'email must be a valid email address' })
   @MaxLength(255)
   email!: string;
 
+  @ApiProperty({ example: 'User12345', format: 'password' })
   @IsString()
   @IsNotEmpty({ message: 'password is required' })
   @MaxLength(PASSWORD_MAX_LENGTH)

@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
+import { RedisService } from '../../src/redis/redis.service';
 import { setupSwagger } from '../../src/swagger/swagger';
 
 export type TestApp = INestApplication<App>;
@@ -47,3 +48,21 @@ export async function createTestApp(
 
 /** Supertest agent bound to the app's HTTP server. */
 export const http = (app: TestApp) => request(app.getHttpServer());
+
+/**
+ * The Redis client connects in the background. Suites that assert cache or
+ * rate-limit behaviour wait for it so the first requests do not fall back.
+ */
+export async function waitForRedis(app: TestApp, timeoutMs = 5000) {
+  const redis = app.get(RedisService);
+  const deadline = Date.now() + timeoutMs;
+  while (!redis.isReady && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (!redis.isReady) {
+    throw new Error(
+      'Test Redis is not reachable. Start it: npm run test:db:up',
+    );
+  }
+  return redis;
+}

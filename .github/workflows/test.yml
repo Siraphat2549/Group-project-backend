@@ -42,11 +42,16 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # The Prisma client is generated code: without it nothing type-checks.
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Lint
+        run: npx eslint "{src,test}/**/*.ts"
       - name: Unit tests (with coverage)
         run: npm run test:cov
       - name: Integration tests (real MySQL + Redis)
         run: npm run test:integration
       - name: E2E tests (real MySQL + Redis)
         run: npm run test:e2e
-      - name: OpenAPI spec + documentation report
-        run: npm run openapi
+      - name: OpenAPI spec (fails if any endpoint is undocumented)
+        run: npm run openapi:check

@@ -68,6 +68,22 @@ describe('lintOpenApiDocument', () => {
     ]);
   });
 
+  it('UT-DOC-06 does not require 401 when the token is optional', () => {
+    const { errors } = lintOpenApiDocument(
+      doc({
+        '/rooms': {
+          get: {
+            summary: 'List',
+            tags: ['Rooms'],
+            security: [{ 'access-token': [] }, {}],
+            responses: ok,
+          },
+        },
+      }),
+    );
+    expect(errors).toEqual([]);
+  });
+
   it('UT-DOC-04 warns (not errors) when a path-param endpoint lacks 404', () => {
     const result = lintOpenApiDocument(
       doc({

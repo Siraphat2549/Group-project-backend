@@ -1,3 +1,6 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 /**
  * Environment for integration + E2E tests. Defaults match
  * docker-compose.test.yml (`npm run test:db:up`). Override with
@@ -14,6 +17,10 @@ export const TEST_DEFAULTS = {
 
 /** Used only when not already set (a suite may override them). */
 const SOFT_DEFAULTS: Record<string, string> = {
+  // Uploaded test images never land in the project's uploads/ folder.
+  UPLOAD_DIR: join(tmpdir(), 'hotel-booking-test-uploads'),
+  // Fast hashes; bcrypt strength itself is covered by unit tests.
+  BCRYPT_ROUNDS: '4',
   JWT_SECRET: 'test-only-jwt-secret-do-not-use-anywhere-else',
   JWT_EXPIRES_IN: '15m',
   CACHE_TTL_SECONDS: '60',

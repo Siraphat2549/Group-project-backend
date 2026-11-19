@@ -40,7 +40,11 @@ export function lintOpenApiDocument(doc: OpenAPIObject): OpenApiLintResult {
 
       const id = `${method.toUpperCase()} ${path}`;
       const codes = Object.keys(op.responses ?? {});
-      const secured = (op.security ?? doc.security ?? []).length > 0;
+      const requirements = op.security ?? doc.security ?? [];
+      // A `{}` entry means the token is optional (@ApiOptionalAuth): no 401.
+      const secured =
+        requirements.length > 0 &&
+        requirements.every((r) => Object.keys(r).length > 0);
 
       if (!op.summary?.trim()) {
         errors.push(`${id}: missing summary (add @ApiOperation)`);

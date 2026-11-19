@@ -3,6 +3,7 @@
   "paths": {
     "/auth/register": {
       "post": {
+        "description": "Creates a **Regular User** account. Sending a `role` is rejected; Admins come from the seed script.",
         "operationId": "AuthController_register",
         "parameters": [],
         "requestBody": {
@@ -17,9 +18,60 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Account created (the password is never returned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Account created successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email is already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded, retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "summary": "Sign up",
         "tags": [
           "Auth"
         ]
@@ -27,6 +79,7 @@
     },
     "/auth/login": {
       "post": {
+        "description": "Returns a JWT. In Swagger UI: copy `data.accessToken`, click **Authorize**, paste it, then call the endpoints with a lock.",
         "operationId": "AuthController_login",
         "parameters": [],
         "requestBody": {
@@ -41,9 +94,60 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Logged in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Login successful"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LoginResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid email or password (same answer for both)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded, retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "summary": "Log in",
         "tags": [
           "Auth"
         ]
@@ -51,13 +155,56 @@
     },
     "/auth/logout": {
       "post": {
+        "description": "Revokes the token in the `Authorization` header; it returns 401 from then on. Other sessions stay logged in.",
         "operationId": "AuthController_logout",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Logged out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Logged out successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Token store (Redis) is down; try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Log out",
         "tags": [
           "Auth"
         ]
@@ -65,6 +212,7 @@
     },
     "/health": {
       "get": {
+        "description": "For monitoring and deployment checks: 200 when everything is up, 503 with the failing dependency under `error`. Never rate limited; never includes credentials.",
         "operationId": "HealthController_check",
         "parameters": [],
         "responses": {
@@ -226,6 +374,7 @@
             }
           }
         },
+        "summary": "Readiness check (app + MySQL + Redis)",
         "tags": [
           "Health"
         ]
@@ -233,6 +382,7 @@
     },
     "/health/live": {
       "get": {
+        "description": "Used by the Docker HEALTHCHECK. Does not touch MySQL or Redis, so a short database outage never restarts the container.",
         "operationId": "HealthController_live",
         "parameters": [],
         "responses": {
@@ -394,6 +544,7 @@
             }
           }
         },
+        "summary": "Liveness check (process only)",
         "tags": [
           "Health"
         ]
@@ -401,18 +552,51 @@
     },
     "/users/me": {
       "get": {
+        "description": "The user is taken from the token, never from the URL.",
         "operationId": "UsersController_getProfile",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Your own profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "View my profile",
         "tags": [
           "Users"
         ]
       },
       "patch": {
+        "description": "Send any of `name`, `email`, `newPassword`. Changing `email` or the password requires `currentPassword` and returns a fresh `token` (use it from now on); a password change signs out every other session. The role cannot be changed.",
         "operationId": "UsersController_updateProfile",
         "parameters": [],
         "requestBody": {
@@ -427,9 +611,83 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Profile updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Profile updated successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserResponseDto"
+                    },
+                    "token": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/IssuedTokenDto"
+                        }
+                      ],
+                      "description": "Only when the email or password changed: the new token to use from now on"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid data, nothing to update, or `currentPassword` missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token, or `currentPassword` is incorrect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email is already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded, retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update my profile",
         "tags": [
           "Users"
         ]
@@ -437,13 +695,119 @@
     },
     "/rooms": {
       "get": {
+        "description": "Public. Active rooms with their images, cheapest first, filterable by capacity and price. Cached in Redis (`X-Cache` header); with an Admin token, `includeInactive=true` also lists deactivated rooms.",
         "operationId": "RoomsController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "capacity",
+            "required": false,
+            "in": "query",
+            "description": "Only rooms that fit at least this many guests",
+            "schema": {
+              "minimum": 1,
+              "example": 2,
+              "type": "number"
+            }
+          },
+          {
+            "name": "minPrice",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "example": 1000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxPrice",
+            "required": false,
+            "in": "query",
+            "description": "Must be ≥ minPrice",
+            "schema": {
+              "minimum": 0,
+              "example": 5000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "Admin only: also return deactivated rooms. Ignored for other callers",
+            "schema": {
+              "example": false,
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Rooms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoomResponseDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PaginationMetaDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query (e.g. minPrice greater than maxPrice)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          },
+          {}
+        ],
+        "summary": "List rooms",
         "tags": [
           "Rooms"
         ]
@@ -463,9 +827,75 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Room created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Room created successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RoomResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A room with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a room (Admin)",
         "tags": [
           "Rooms"
         ]
@@ -473,20 +903,148 @@
     },
     "/rooms/search": {
       "get": {
+        "description": "Public. Only rooms with **no** PENDING / APPROVED / PAID booking overlapping `[checkIn, checkOut)`, plus the same filters as `GET /rooms` (e.g. `capacity`). A room is free again on the check-out day.",
         "operationId": "RoomsController_search",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "capacity",
+            "required": false,
+            "in": "query",
+            "description": "Only rooms that fit at least this many guests",
+            "schema": {
+              "minimum": 1,
+              "example": 2,
+              "type": "number"
+            }
+          },
+          {
+            "name": "minPrice",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "example": 1000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxPrice",
+            "required": false,
+            "in": "query",
+            "description": "Must be ≥ minPrice",
+            "schema": {
+              "minimum": 0,
+              "example": 5000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "Admin only: also return deactivated rooms. Ignored for other callers",
+            "schema": {
+              "example": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "checkIn",
+            "required": true,
+            "in": "query",
+            "description": "ISO 8601 date or date-time; not in the past",
+            "schema": {
+              "example": "2026-12-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkOut",
+            "required": true,
+            "in": "query",
+            "description": "ISO 8601, after checkIn, at most 30 nights later. The stay is [checkIn, checkOut)",
+            "schema": {
+              "example": "2026-12-03",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Rooms free for the whole stay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoomResponseDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PaginationMetaDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "checkIn / checkOut missing or invalid, checkOut not after checkIn, or checkIn in the past",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          },
+          {}
+        ],
+        "summary": "Search available rooms",
         "tags": [
-          "Rooms"
+          "Rooms",
+          "Search"
         ]
       }
     },
     "/rooms/{id}": {
       "get": {
+        "description": "Public. Room details including image metadata and URLs. Deactivated rooms are 404 except for an Admin.",
         "operationId": "RoomsController_findOne",
         "parameters": [
           {
@@ -500,14 +1058,57 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Room details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RoomResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id must be a number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          },
+          {}
+        ],
+        "summary": "View a room",
         "tags": [
           "Rooms"
         ]
       },
       "patch": {
+        "description": "Send any subset of the fields. `{ \"isActive\": false }` deactivates the room: hidden from guests and no longer bookable.",
         "operationId": "RoomsController_update",
         "parameters": [
           {
@@ -531,14 +1132,91 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Room updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Room updated successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RoomResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A room with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Update or deactivate a room (Admin)",
         "tags": [
           "Rooms"
         ]
       },
       "delete": {
+        "description": "Only a room that was never booked. Otherwise 409: deactivate it with `PATCH /rooms/{id}` instead, so booking history is kept.",
         "operationId": "RoomsController_remove",
         "parameters": [
           {
@@ -552,9 +1230,81 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Room deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Room deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id must be a number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Room has bookings and cannot be deleted; deactivate it instead",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a room (Admin)",
         "tags": [
           "Rooms"
         ]
@@ -562,6 +1312,7 @@
     },
     "/rooms/{id}/images": {
       "post": {
+        "description": "`multipart/form-data` with one file in the `image` field: JPEG, PNG or WebP, at most 5 MB, at most 10 images per room. The file is served at the returned `url`.",
         "operationId": "RoomsController_uploadImage",
         "parameters": [
           {
@@ -573,11 +1324,116 @@
             }
           }
         ],
-        "responses": {
-          "201": {
-            "description": ""
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
           }
         },
+        "responses": {
+          "201": {
+            "description": "Image stored; returns its metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Image uploaded successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RoomImageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file, or not a JPEG / PNG / WebP image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The room already has the maximum of 10 images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File larger than 5 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Upload a room image (Admin)",
         "tags": [
           "Rooms"
         ]
@@ -585,6 +1441,7 @@
     },
     "/rooms/{id}/images/{imageId}": {
       "delete": {
+        "description": "Removes the image metadata and the file.",
         "operationId": "RoomsController_removeImage",
         "parameters": [
           {
@@ -606,9 +1463,71 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Image deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Image deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id / imageId must be numbers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room or image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete a room image (Admin)",
         "tags": [
           "Rooms"
         ]
@@ -616,6 +1535,7 @@
     },
     "/bookings": {
       "post": {
+        "description": "Books a room for `[checkIn, checkOut)` with status `PENDING`; `totalPrice = nights × pricePerNight`. Records a `BOOKING_CREATED` notification. Safe under concurrent requests: only one booking can win an overlapping slot.",
         "operationId": "BookingsController_create",
         "parameters": [],
         "requestBody": {
@@ -630,21 +1550,199 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Booking created with status PENDING",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Booking created successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BookingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dates (checkOut not after checkIn, checkIn in the past, stay over 30 nights) or more guests than the room fits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Room (or the room is deactivated) not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Room is already booked for an overlapping date range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded, retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Create a booking",
         "tags": [
           "Bookings"
         ]
       },
       "get": {
+        "description": "Regular User: only your own bookings. Admin: every booking, optionally filtered by `userId`.",
         "operationId": "BookingsController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/BookingStatus"
+            }
+          },
+          {
+            "name": "roomId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Admin only. Regular users always get just their own bookings",
+            "schema": {
+              "minimum": 1,
+              "example": 7,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Bookings, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BookingResponseDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PaginationMetaDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List bookings",
         "tags": [
           "Bookings"
         ]
@@ -652,6 +1750,7 @@
     },
     "/bookings/{id}": {
       "get": {
+        "description": "Your own booking, or any booking for an Admin.",
         "operationId": "BookingsController_findOne",
         "parameters": [
           {
@@ -665,9 +1764,70 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Booking details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id must be a number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Booking belongs to another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "View a booking",
         "tags": [
           "Bookings"
         ]
@@ -675,6 +1835,7 @@
     },
     "/bookings/{id}/cancel": {
       "patch": {
+        "description": "The owner may cancel a `PENDING` or `APPROVED` booking; an Admin may cancel any booking that is not cancelled yet. Frees the dates and records a `BOOKING_CANCELLED` notification.",
         "operationId": "BookingsController_cancel",
         "parameters": [
           {
@@ -688,9 +1849,85 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Booking cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Booking cancelled successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BookingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id must be a number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Booking belongs to another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already cancelled, or a PAID booking (only an Admin can cancel it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Cancel a booking",
         "tags": [
           "Bookings"
         ]
@@ -698,6 +1935,7 @@
     },
     "/bookings/{id}/status": {
       "patch": {
+        "description": "Allowed: `PENDING → APPROVED / CANCELLED`, `APPROVED → PAID / CANCELLED`, `PAID → CANCELLED`. `CANCELLED` is final. Records a notification for the booking owner.",
         "operationId": "BookingsController_updateStatus",
         "parameters": [
           {
@@ -721,9 +1959,85 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Booking status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Booking status updated to APPROVED"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/BookingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status value or id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Logged in, but not an Admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Transition not allowed (the message lists the allowed targets)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Change a booking status (Admin)",
         "tags": [
           "Bookings"
         ]
@@ -731,13 +2045,106 @@
     },
     "/notifications": {
       "get": {
+        "description": "Booking events (`BOOKING_CREATED`, `BOOKING_CANCELLED`, `BOOKING_STATUS_CHANGED`), newest first. Admins may add `all=true` to see every user.",
         "operationId": "NotificationsController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "unread",
+            "required": false,
+            "in": "query",
+            "description": "Only unread events",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "all",
+            "required": false,
+            "in": "query",
+            "description": "Admin only: events of every user. Ignored for regular users",
+            "schema": {
+              "example": false,
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notifications, paginated, with `meta.unreadCount`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NotificationResponseDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/NotificationsMetaDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List my notifications",
         "tags": [
           "Notifications"
         ]
@@ -749,9 +2156,45 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "All your unread notifications are now read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "3 notification(s) marked as read"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/MarkAllReadResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Mark all my notifications as read",
         "tags": [
           "Notifications"
         ]
@@ -772,9 +2215,65 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notification marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "data"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Notification marked as read"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id must be a number",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or logged-out access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification (or it belongs to another user) not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Mark one notification as read",
         "tags": [
           "Notifications"
         ]
@@ -828,33 +2327,701 @@
       }
     },
     "schemas": {
+      "Role": {
+        "type": "string",
+        "enum": [
+          "USER",
+          "ADMIN"
+        ]
+      },
+      "UserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 7
+          },
+          "name": {
+            "type": "string",
+            "example": "Alice"
+          },
+          "email": {
+            "type": "string",
+            "example": "alice@example.com"
+          },
+          "role": {
+            "example": "USER",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "RegisterDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Alice",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "example": "alice@example.com",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Case-insensitive; must not be registered yet"
+          },
+          "password": {
+            "type": "string",
+            "example": "Secret123",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72,
+            "description": "At least one letter and one number"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ]
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 400
+          },
+          "message": {
+            "description": "Human-readable reason; an array for validation errors",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": "checkOut must be after checkIn"
+          },
+          "error": {
+            "type": "string",
+            "example": "Bad Request"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT to send as `Authorization: Bearer <accessToken>` (in Swagger UI: paste it into Authorize)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjd9.signature"
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ],
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 3600,
+            "description": "Seconds until the token expires"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponseDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn",
+          "user"
+        ]
       },
       "LoginDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@hotel.test",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "example": "User12345",
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "IssuedTokenDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT to send as `Authorization: Bearer <accessToken>` (in Swagger UI: paste it into Authorize)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjd9.signature"
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ],
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 3600,
+            "description": "Seconds until the token expires"
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn"
+        ]
       },
       "UpdateProfileDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Alice Smith",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "example": "alice.smith@example.com",
+            "format": "email",
+            "description": "Requires `currentPassword`"
+          },
+          "currentPassword": {
+            "type": "string",
+            "example": "Secret123",
+            "format": "password",
+            "description": "Required when changing `email` or setting `newPassword`"
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "NewSecret456",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72,
+            "description": "At least one letter and one number. Requires `currentPassword`; signs out all other sessions"
+          }
+        }
+      },
+      "RoomImageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 3
+          },
+          "url": {
+            "type": "string",
+            "example": "/uploads/rooms/4f9c2a1e-8d7b-4c1a-9e33-2b6d1f0a7c55.jpg",
+            "description": "Path of the image file on this API"
+          },
+          "originalName": {
+            "type": "string",
+            "nullable": true,
+            "example": "deluxe-501.jpg"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true,
+            "example": "image/jpeg"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "nullable": true,
+            "example": 248310
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "originalName",
+          "mimeType",
+          "sizeBytes",
+          "createdAt"
+        ]
+      },
+      "RoomResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Deluxe 501"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "King bed, city view, 32 m²"
+          },
+          "capacity": {
+            "type": "number",
+            "example": 2,
+            "description": "Maximum number of guests"
+          },
+          "pricePerNight": {
+            "type": "number",
+            "example": 2500,
+            "description": "Price per night"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "description": "false = deactivated: hidden from guests and not bookable"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomImageResponseDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "capacity",
+          "pricePerNight",
+          "isActive",
+          "images",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginationMetaDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 20
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Matching items on all pages"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "totalPages"
+        ]
       },
       "CreateRoomDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Deluxe 501",
+            "maxLength": 100,
+            "description": "Must be unique"
+          },
+          "description": {
+            "type": "string",
+            "example": "King bed, city view, 32 m²",
+            "maxLength": 2000
+          },
+          "capacity": {
+            "type": "number",
+            "example": 2,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of guests"
+          },
+          "pricePerNight": {
+            "type": "number",
+            "example": 2500,
+            "minimum": 0.01,
+            "maximum": 99999999,
+            "description": "Price per night, up to 2 decimal places"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "default": true,
+            "description": "false = deactivated (hidden from guests, not bookable)"
+          }
+        },
+        "required": [
+          "name",
+          "capacity",
+          "pricePerNight"
+        ]
       },
       "UpdateRoomDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Deluxe 501",
+            "maxLength": 100,
+            "description": "Must be unique"
+          },
+          "description": {
+            "type": "string",
+            "example": "King bed, city view, 32 m²",
+            "maxLength": 2000
+          },
+          "capacity": {
+            "type": "number",
+            "example": 2,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of guests"
+          },
+          "pricePerNight": {
+            "type": "number",
+            "example": 2500,
+            "minimum": 0.01,
+            "maximum": 99999999,
+            "description": "Price per night, up to 2 decimal places"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true,
+            "default": true,
+            "description": "false = deactivated (hidden from guests, not bookable)"
+          }
+        }
+      },
+      "BookingStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "APPROVED",
+          "CANCELLED",
+          "PAID"
+        ],
+        "description": "PENDING → APPROVED → PAID; any of them → CANCELLED (final)"
+      },
+      "BookingRoomDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Deluxe 501"
+          },
+          "pricePerNight": {
+            "type": "number",
+            "example": 2500
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "pricePerNight"
+        ]
+      },
+      "BookingUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 7
+          },
+          "name": {
+            "type": "string",
+            "example": "Alice"
+          },
+          "email": {
+            "type": "string",
+            "example": "alice@example.com"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email"
+        ]
+      },
+      "BookingResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 12
+          },
+          "status": {
+            "example": "PENDING",
+            "description": "PENDING → APPROVED → PAID; any of them → CANCELLED (final)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BookingStatus"
+              }
+            ]
+          },
+          "checkIn": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-01T00:00:00.000Z"
+          },
+          "checkOut": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-03T00:00:00.000Z"
+          },
+          "nights": {
+            "type": "number",
+            "example": 2
+          },
+          "guests": {
+            "type": "number",
+            "example": 2
+          },
+          "totalPrice": {
+            "type": "number",
+            "example": 5000,
+            "description": "nights × room.pricePerNight"
+          },
+          "room": {
+            "$ref": "#/components/schemas/BookingRoomDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/BookingUserDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "checkIn",
+          "checkOut",
+          "nights",
+          "guests",
+          "totalPrice",
+          "room",
+          "user",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "CreateBookingDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "roomId": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1
+          },
+          "checkIn": {
+            "type": "string",
+            "example": "2026-12-01",
+            "description": "ISO 8601 date or date-time (e.g. 2026-12-01T14:00:00+07:00); not in the past"
+          },
+          "checkOut": {
+            "type": "string",
+            "example": "2026-12-03",
+            "description": "ISO 8601, after checkIn, at most 30 nights later. Back-to-back stays are allowed"
+          },
+          "guests": {
+            "type": "number",
+            "example": 2,
+            "minimum": 1,
+            "maximum": 20,
+            "default": 1,
+            "description": "Must not exceed the room capacity"
+          }
+        },
+        "required": [
+          "roomId",
+          "checkIn",
+          "checkOut"
+        ]
       },
       "UpdateBookingStatusDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "status": {
+            "example": "APPROVED",
+            "description": "Allowed: PENDING → APPROVED / CANCELLED, APPROVED → PAID / CANCELLED, PAID → CANCELLED",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BookingStatus"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "NotificationType": {
+        "type": "string",
+        "enum": [
+          "BOOKING_CREATED",
+          "BOOKING_CANCELLED",
+          "BOOKING_STATUS_CHANGED"
+        ]
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 31
+          },
+          "userId": {
+            "type": "number",
+            "example": 7,
+            "description": "Owner of the booking"
+          },
+          "bookingId": {
+            "type": "number",
+            "example": 12
+          },
+          "type": {
+            "example": "BOOKING_CREATED",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationType"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "example": "Booking #12 for \"Deluxe 501\" (2026-12-01 to 2026-12-03) was created and is pending approval"
+          },
+          "isRead": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "bookingId",
+          "type",
+          "message",
+          "isRead",
+          "createdAt"
+        ]
+      },
+      "NotificationsMetaDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 20
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Matching items on all pages"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3
+          },
+          "unreadCount": {
+            "type": "number",
+            "example": 2,
+            "description": "Your unread notifications (all pages)"
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "totalPages",
+          "unreadCount"
+        ]
+      },
+      "MarkAllReadResultDto": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "number",
+            "example": 3,
+            "description": "Notifications marked as read"
+          }
+        },
+        "required": [
+          "updated"
+        ]
       }
     }
   }

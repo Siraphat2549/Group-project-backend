@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger';
 import {
   HealthCheck,
   HealthCheckService,
@@ -23,6 +24,11 @@ export class HealthController {
    */
   @Get()
   @HealthCheck()
+  @ApiOperation({
+    summary: 'Readiness check (app + MySQL + Redis)',
+    description:
+      'For monitoring and deployment checks: 200 when everything is up, 503 with the failing dependency under `error`. Never rate limited; never includes credentials.',
+  })
   check() {
     return this.health.check([
       () => this.app(),
@@ -37,6 +43,11 @@ export class HealthController {
    */
   @Get('live')
   @HealthCheck()
+  @ApiOperation({
+    summary: 'Liveness check (process only)',
+    description:
+      'Used by the Docker HEALTHCHECK. Does not touch MySQL or Redis, so a short database outage never restarts the container.',
+  })
   live() {
     return this.health.check([() => this.app()]);
   }
