@@ -55,9 +55,7 @@ docs/
 docker-entrypoint.sh      # migrate -> (seed) -> start
 ```
 
-Each feature folder follows the same layers: **controller** (HTTP, guards,
-status codes) -> **service** (business rules) -> **Prisma** (data), with DTOs
-for input validation and mappers for output.
+Every feature folder has the same layers: the controller handles requests, the service holds the business rules, and Prisma talks to the database, with DTOs to check input and mappers to format output.
 
 ## Configuration
 
@@ -116,11 +114,11 @@ docker compose exec api node dist/database/seed.js
 MySQL and Redis are published on `127.0.0.1` only, so they are reachable from
 the host for development but never from the network.
 
-### Without Docker for the API (deps still in Docker)
+### Without Docker for the API
 
 ```bash
 npm ci
-npx prisma generate          # build the Prisma client (generated code)
+npx prisma generate          # build the Prisma client
 docker compose up -d mysql redis
 npm run prisma:deploy        # create the tables
 npm run seed                 # optional: admin + demo user + sample rooms
@@ -132,7 +130,7 @@ the Windows `MySQL80` service holds 3306), set `MYSQL_HOST_PORT=3308` (or
 `REDIS_HOST_PORT`) in `.env` and use the same port in `DATABASE_URL` /
 `REDIS_URL`. Inside Docker the API still uses 3306.
 
-### Build & run the production image only
+### Build & Run the production image only
 
 ```bash
 docker build -t hotel-booking-api .
@@ -150,8 +148,7 @@ schema/migrations, and runs as the unprivileged `node` user.
 | `GET /health` | readiness / **monitoring** (UptimeRobot etc.) | app, MySQL, Redis | `200` all up · `503` any down |
 | `GET /health/live` | liveness (Docker `HEALTHCHECK`) | process only | `200` |
 
-Liveness deliberately ignores dependencies so a short DB outage doesn't make
-Docker restart the API (NFR-9); point external monitoring at `/health`.
+The liveness check doesn’t test the database or other services on purpose. That way, if the database goes down for a short time, Docker won’t restart the API (NFR-9). For outside monitoring, use `/health`.
 
 ```json
 // GET /health -> 200
@@ -182,14 +179,14 @@ npm run prisma:deploy    # prod/CI: apply pending migrations
 npm run prisma:generate  # regenerate the client (also runs in `npm run build`)
 ```
 
-## API — rooms, bookings, search, notifications
+## API — rooms, Bookings, Search, Notifications
 
 All bodies are JSON. Mutations answer `{ "message", "data" }` (FR-34), detail
 reads `{ "data" }`, lists `{ "data": [...], "meta": { page, limit, total, totalPages } }`.
 Errors use Nest's shape `{ "statusCode", "message", "error" }` with a readable
 `message` (FR-32/33). Auth = `Authorization: Bearer <JWT>`.
 
-| Method & path | Who | Notes |
+| Method & Path | Who | Notes |
 |---|---|---|
 | `GET /rooms` | public | `page, limit, capacity` (min guests), `minPrice, maxPrice`; admin may add `includeInactive=true` |
 | `GET /rooms/search` | public | **required** `checkIn, checkOut` + same filters; only rooms free for the whole stay (FR-27–29) |
@@ -224,7 +221,7 @@ Errors use Nest's shape `{ "statusCode", "message", "error" }` with a readable
   `BOOKING_CANCELLED`, `BOOKING_STATUS_CHANGED`.
 
 ```bash
-# search, then book (TOKEN from login)
+# search, then book
 curl "http://localhost:3000/rooms/search?checkIn=2026-12-01&checkOut=2026-12-03&capacity=2"
 curl -X POST http://localhost:3000/bookings -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -233,7 +230,7 @@ curl -X POST http://localhost:3000/bookings -H "Authorization: Bearer $TOKEN" \
 curl -X POST http://localhost:3000/rooms/1/images -H "Authorization: Bearer $ADMIN_TOKEN" -F image=@room.jpg
 ```
 
-## API - authentication & profile
+## API - Authentication & Profile
 
 | Method & path | Who | Notes |
 |---|---|---|
@@ -256,7 +253,7 @@ curl http://localhost:3000/users/me -H "Authorization: Bearer $TOKEN"
 curl -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer $TOKEN"
 ```
 
-## Security: authentication & RBAC
+## Security: Authentication & RBAC
 
 - **Passwords** (NFR-1) are hashed with bcrypt (per-password salt, cost
   `BCRYPT_ROUNDS`, default 12). The hash never leaves the database: every user
@@ -271,7 +268,7 @@ curl -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer $TOKEN"
 - **Roles** (FR-5): `USER` and `ADMIN`. Sign-up can only create `USER`; admins
   are created by the seed script. Enforcement is at the API layer with guards:
 
-  | Guard / decorator | Effect |
+  | Guard / Decorator | Effect |
   |---|---|
   | `JwtAuthGuard` | 401 unless a valid, non-revoked token is sent (NFR-2) |
   | `RolesGuard` + `@Roles(Role.ADMIN)` | 403 unless the user has the role (NFR-3) |
@@ -286,7 +283,7 @@ curl -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer $TOKEN"
 - **Logs** never contain passwords, hashes, tokens, request bodies or query
   strings (see [Logging](#logging--monitoring)).
 
-## Performance, caching & rate limiting
+## Performance, Caching & Rate limiting
 
 ### Where and why caching is used
 
@@ -319,7 +316,7 @@ How it works (`src/cache/`):
   served to the public). A search result is dropped as soon as a booking changes
   availability - and even if a stale one slipped through, `POST /bookings` re-checks availability inside a transaction.
 - Every cacheable response carries `X-Cache: HIT | MISS | BYPASS`.
-- If Redis is down, requests are simply served from MySQL (NFR-9).
+- If Redis is down, requests are simply served from MySQL.
 
 ```bash
 curl -si "http://localhost:3000/rooms?capacity=2" | grep -i x-cache   # MISS
@@ -358,7 +355,7 @@ reverse proxy set `TRUST_PROXY` so the real client IP is used.
 - The API is stateless (JWT + Redis), so more instances can be added behind a
   load balancer without sticky sessions (NFR-10/11).
 
-## Logging & monitoring
+## Logging & Monitoring
 
 - **One line per request** (`HTTP` logger): method, path, status, duration,
   client IP, user id and request id - e.g.
@@ -375,16 +372,14 @@ reverse proxy set `TRUST_PROXY` so the real client IP is used.
 - Monitoring: point an uptime checker at `GET /health` (200 = app + MySQL +
   Redis up, 503 otherwise).
 
-## Seed data & test accounts
+## Seed data & Test accounts
 
 ```bash
 npm run seed                                   # development
 docker compose exec api node dist/database/seed.js   # inside the container
 ```
 
-Creates one Admin, one Regular User and five sample rooms. It is idempotent:
-existing accounts and rooms are left untouched (set `SEED_RESET_PASSWORDS=true`
-to reset the two passwords).
+Creates one Admin, one Regular User, and five sample rooms. Running it again won’t change existing accounts or rooms. To reset the two passwords, set SEED_RESET_PASSWORDS=true.
 
 | Role | Email (development default) | Password (development default) |
 |---|---|---|
@@ -504,7 +499,7 @@ A managed database / Redis (NFR-20) works the same way: point `DATABASE_URL`
 and `REDIS_URL` (`rediss://` for TLS) at them and start only the `api`
 service.
 
-## API documentation (Swagger / OpenAPI) — FR-37
+## API Documentation (Swagger / OpenAPI) — FR-37
 
 | | URL |
 |---|---|
@@ -615,7 +610,7 @@ and date-validation logic). Details in
 - Health: the MySQL probe can be swapped for terminus'
   `PrismaHealthIndicator.pingCheck('database', prisma)`.
 
-## Limitations / known issues
+## Limitations / Known issues
 
 - The deployment runs a single API instance on Railway. Uploaded images live
   on that service's volume; running several instances would need shared or
