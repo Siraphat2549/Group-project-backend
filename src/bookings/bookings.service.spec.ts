@@ -16,9 +16,15 @@ const alice: AuthUser = { id: 1, email: 'alice@example.com', role: Role.USER };
 const bob: AuthUser = { id: 2, email: 'bob@example.com', role: Role.USER };
 const admin: AuthUser = { id: 9, email: 'admin@example.com', role: Role.ADMIN };
 
-/** Dates relative to now, so the "not in the past" rule always passes. */
+/**
+ * Dates relative to ONE fixed "now", taken once when the file loads, so the
+ * "not in the past" rule passes and stays are exact whole days. Reading the
+ * clock per call made inDays(10) → inDays(12) occasionally 2 days + 1 ms,
+ * which countNights() correctly rounds up to 3 nights (flaky on slow CI).
+ */
+const NOW = Date.now();
 const inDays = (days: number) =>
-  new Date(Date.now() + days * 86_400_000).toISOString();
+  new Date(NOW + days * 86_400_000).toISOString();
 
 const ROOM = {
   id: 10,
