@@ -5,7 +5,7 @@ Spec: FR-1…FR-38, NFR-1…NFR-20 (ITCS258 Hotel Booking Specification).
 
 > **Status:** all features are in — auth (sign-up/login/logout/profile), RBAC,
 > rooms + images, bookings, search, notifications, health check, Redis caching,
-> rate limiting, logging, Swagger docs and Docker. 304 automated tests (unit,
+> rate limiting, logging, Swagger docs and Docker. 309 automated tests (unit,
 > integration, E2E) pass. Deployed on Railway:
 > **<https://group-project-backend-production-7db1d7b7.up.railway.app/docs>**
 > (see [Deployment](#deployment)).
@@ -586,7 +586,7 @@ npm run test:all       # starts test MySQL :3307 + Redis :6380, runs all 3 level
 npm run test:db:down   # stop the test containers and wipe their data
 ```
 
-**Latest results (2026-11-19): 304 / 304 passing** — unit 159 · integration
+**Latest results (2026-11-19): 309 / 309 passing** — unit 164 · integration
 82 · E2E 63; unit coverage 73 % of statements (100 % for the booking, status
 and date-validation logic). Details in
 [API-TESTING.md §5](docs/API-TESTING.md#5-results).

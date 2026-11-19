@@ -5,7 +5,7 @@ Booking Specification, and the latest results.
 
 - **Tools:** Jest 30 · ts-jest · Supertest · `@nestjs/testing`
 - **Status legend:** ✅ passing · ❌ failing
-- **Latest run:** 2026-11-19 — **304 tests, all passing** (159 unit · 82
+- **Latest run:** 2026-11-19 — **309 tests, all passing** (164 unit · 82
   integration · 63 E2E), see [§5 Results](#5-results).
 
 ## 1. Test levels
@@ -308,15 +308,15 @@ database: identical results, no flaky tests._
 
 | Level | Suites | Tests | Passed | Failed |
 |---|---|---|---|---|
-| Unit | 17 | 159 | 159 | 0 |
+| Unit | 18 | 164 | 164 | 0 |
 | Integration | 6 | 82 | 82 | 0 |
 | E2E | 5 | 63 | 63 | 0 |
-| **Total** | **28** | **304** | **304** | **0** |
+| **Total** | **29** | **309** | **309** | **0** |
 
 ```text
 $ npm run test:cov
-Test Suites: 17 passed, 17 total
-Tests:       159 passed, 159 total
+Test Suites: 18 passed, 18 total
+Tests:       164 passed, 164 total
 
 $ npm run test:integration
 Test Suites: 6 passed, 6 total
@@ -328,7 +328,7 @@ Tests:       63 passed, 63 total
 ```
 
 **Unit coverage** (`npm run test:cov`): statements 72.9 % · branches 74.3 % ·
-functions 60.6 % · lines 73.5 %. The business-logic files the rubric names
+functions 60.8 % · lines 73.5 %. The business-logic files the rubric names
 are covered almost completely; the rest of the gap is wiring (modules,
 controllers, `main.ts`), which the integration and E2E levels exercise.
 
