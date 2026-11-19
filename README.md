@@ -3,10 +3,7 @@
 REST API for a hotel booking system (NestJS · MySQL · Redis · Docker).
 Spec: FR-1…FR-38, NFR-1…NFR-20 (ITCS258 Hotel Booking Specification).
 
-> **Status:** all features are in — auth (sign-up/login/logout/profile), RBAC,
-> rooms + images, bookings, search, notifications, health check, Redis caching,
-> rate limiting, logging, Swagger docs and Docker. 309 automated tests (unit,
-> integration, E2E) pass. Deployed on Railway:
+> **Status:** All features are complete, including user accounts, access control, rooms, bookings, search, and notifications. The app also has caching, rate limiting, logging, API docs, and Docker support. All 309 automated tests pass. It is live on Railway:
 > **<https://group-project-backend-production-7db1d7b7.up.railway.app/docs>**
 > (see [Deployment](#deployment)).
 
