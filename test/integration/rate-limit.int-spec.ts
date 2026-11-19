@@ -26,10 +26,15 @@ describe('Rate limiting (integration)', () => {
     prisma = app.get(PrismaService);
   });
   // Counters live in Redis; flushing it gives every test a fresh window.
-  beforeEach(async () =>
-    resetTestState({ db: prisma, cache: (await waitForRedis(app)).client }),
-  );
-  afterAll(() => app.close());
+  const reset = async () =>
+    resetTestState({ db: prisma, cache: (await waitForRedis(app)).client });
+  beforeEach(reset);
+  // These tests block this client on purpose. Lift the block before leaving,
+  // so the next suite (or the E2E step that CI runs right after) is not hit.
+  afterAll(async () => {
+    await reset();
+    await app.close();
+  });
 
   it('IT-RL-01 POST /auth/login over the limit -> 429 with Retry-After; other routes keep working', async () => {
     const attempt = () =>
